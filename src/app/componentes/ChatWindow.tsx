@@ -118,14 +118,14 @@ export default function ChatWindow() {
     }
   };
 
-  // 🎨 RENDER - interface do usuário
+  //  RENDER - interface do usuário
   return (
     <div className="flex-1 h-screen flex flex-col bg-gray-100">
-      {/* 🏷️ CABEÇALHO */}
-      <div className="p-4 bg-blue-600 border-b flex justify-between items-center shadow-lg">
+      {/*  CABEÇALHO */}
+      <div className="p-4 bg-blue-600 border-b justify-between flex items-center shadow-lg">
         <div>
           <h2 className="font-bold text-white text-lg">
-            Chat Empresarial 🏢
+            Chat Empresarial
           </h2>
           <p className="text-blue-100 text-sm">
             Sala: {currentRoom} • {isConnected ? '✅ Online' : '❌ Offline'}
@@ -141,15 +141,15 @@ export default function ChatWindow() {
         </div>
       </div>
 
-      {/* 💬 ÁREA DE MENSAGENS */}
+      {/*  ÁREA DE MENSAGENS */}
       <div className="flex-1 p-4 space-y-3 overflow-y-auto bg-gray-50">
         {messages.map((msg) => (
           <div
             key={msg.id}
             className={`p-4 rounded-2xl shadow-lg max-w-md break-words whitespace-normal transition-all duration-300 ${
               msg.from === "me"
-                ? "bg-blue-500 text-white ml-auto hover:bg-blue-600 mb-15"
-                : "bg-gray-700 text-white border border-gray-200 hover:bg-gray-900 mb-15"
+                ? "bg-blue-500 text-white ml-auto hover:bg-blue-600 mb-15 cursor-pointer"
+                : "bg-gray-700 text-white border border-gray-200 hover:bg-gray-900 mb-15 cursor-pointer"
             }`}
           >
             <div className="text-sm leading-relaxed">{msg.text}</div>
@@ -166,7 +166,7 @@ export default function ChatWindow() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* ⌨️ ÁREA DE DIGITAÇÃO */}
+      {/* ÁREA DE DIGITAÇÃO */}
       <div className="p-4 border-t bg-white shadow-inner">
         <div className="flex rounded-lg overflow-hidden border border-gray-300 shadow-sm">
           <input
@@ -176,7 +176,7 @@ export default function ChatWindow() {
             onKeyDown={handleKeyPress}
             placeholder={
               isConnected 
-                ? "Digite sua mensagem... (Enter para enviar)" 
+                ? "Digite sua mensagem..." 
                 : "Conectando ao servidor..."
             }
             className="flex-1 px-4 py-3 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -185,7 +185,7 @@ export default function ChatWindow() {
           <button
             onClick={sendMessage}
             disabled={!isConnected || input.trim() === ""}
-            className="bg-blue-500 text-white px-6 font-medium hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200 flex items-center gap-2"
+            className="bg-blue-500 text-white px-6 cursor-pointer font-medium hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200 flex items-center gap-2"
           >
             <span>Enviar</span>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
