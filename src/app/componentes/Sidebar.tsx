@@ -48,7 +48,7 @@ export default function Sidebar () {
                     <button
                     key={sala.id}
                     onClick={() => mudarSala(sala.id)}
-                    className={`cursor-pointer w-full p-3 rounded-lg text-left transition-all duration-200 flex items-centar gap-3 ${
+                    className={`cursor-pointer w-full p-3 rounded-lg text-left transition-all duration-200 flex items-center gap-3 ${
                         salaAtual === sala.id
                         ? "bg-blue-600 text-white shadow-lg"
                         : "bg-gray-800 text-gray-300 hover:bg-gray-700"
