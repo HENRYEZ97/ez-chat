@@ -1,5 +1,6 @@
 // SERVIDOR SOCKET.IO COM SALAS
- const { Server } = require('socket.io');
+ const { timeStamp } = require('console');
+const { Server } = require('socket.io');
  const io = new Server(3001, {
   cors: {
     origin: "http://localhost:3000",
@@ -12,32 +13,30 @@ console.log('Servidor Socket.IO com salas iniciado na porta 3001...');
 io.on('connection', (socket) => {
   console.log(`USUÁRIO CONECTADO: ${socket.id}`);
 
-// ENTRAR EM UMA SALA
+    //JOIN ADICIONADO (ENTRAR NA SALA)
+    socket.on('join_room', (roomId) => {   
+    socket.join(roomId);
+    console.log(`${socket.id} entrou na sala: ${roomId}`);
+  });
+
+// SAIR DA SALA
   socket.on('leave_room', (roomId) => {
   socket.leave(roomId);
   console.log(`${socket.id} saiu da sala: ${roomId}`);
 });
 
+
 // ENVIAR MENSAGEM PARA UMA SALA
   socket.on('send_message', (data) => {
-    const { room, message, sender } = data;
-  console.log('MENSAGEM RECEBIDA:', data);
+    console.log('MENSAGEM RECEBIDA!', data);
 
-  socket.to(room).emit('receive_message', {
-    room,
-    message,
-    sender,
-  });
-
-// A MENSAGEM É ENVIADA APENAS PARA UMA SALA ESPECÍFICA
     io.to(data.room).emit('receive_message', {
       text: data.text,
-      from: 'other',
       senderId: socket.id,
-      room: data.room,  //SALA
+      room: data.room,
       timestamp: new Date().toISOString()
     });
-});
+  });
 
 socket.on('disconnect', () => {
   console.log(`CLIENTE DESCONECTADO: ${socket.id}`);
