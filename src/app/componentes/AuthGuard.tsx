@@ -1,29 +1,29 @@
-// src/app/page.tsx - VERSÃO COM PROTEÇÃO
+// components/AuthGuard.tsx
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Sidebar from "./componentes/Sidebar";
-import ChatWindow from "./componentes/ChatWindow";
 
-export default function Home () {
-  const [isLoading, setIsLoading] = useState(true);
+interface AuthGuardProps {
+  children: React.ReactNode;
+}
+
+export default function AuthGuard({ children }: AuthGuardProps) {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const router = useRouter();
 
   useEffect(() => {
-    // Verifica se usuário está logado
     const token = localStorage.getItem('token');
     const user = localStorage.getItem('user');
     
     if (!token || !user) {
-      // Se NÃO tiver token, vai para login
       router.push('/login');
     } else {
-      // Se TIVER token, mostra o chat
-      setIsLoading(false);
+      // Opcional: validar token com o backend
+      setIsAuthenticated(true);
     }
   }, [router]);
 
-  if (isLoading) {
+  if (isAuthenticated === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900">
         <div className="text-white">Carregando...</div>
@@ -31,10 +31,5 @@ export default function Home () {
     );
   }
 
-  return (
-    <div className="flex">
-      <Sidebar />
-      <ChatWindow />
-    </div>
-  )
+  return <>{children}</>;
 }
