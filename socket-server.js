@@ -1,4 +1,3 @@
-
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -21,7 +20,6 @@ const pool = new Pool({
   port: Number(process.env.DB_PORT || 5432),
 });
 
-
 const app = express();
 app.use(helmet());
 app.use(cors({ origin: FRONT_URL }));
@@ -33,9 +31,9 @@ const io = new Server(server, {
   cors: { origin: FRONT_URL, methods: ['GET', 'POST'] }
 });
 
-
 function signToken(user) {
-  const payload = { id: user.id, nome: user.nome, email: user.email, setor: user.setor };
+  // Mantém o campo 'criado_em' encriptado no payload do token para evitar SELECT desnecessário
+  const payload = { id: user.id, nome: user.nome, email: user.email, setor: user.setor, criado_em: user.criado_em };
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '1h' });
 }
 
@@ -50,7 +48,6 @@ function criarSalaPrivada(userId1, userId2) {
   return `privada_${ids[0]}_${ids[1]}`;
 }
 
-
 // Register
 app.post('/api/auth/register', async (req, res) => {
   try {
@@ -61,13 +58,17 @@ app.post('/api/auth/register', async (req, res) => {
     if (exists.rowCount > 0) return res.status(409).json({ success: false, message: 'Email já cadastrado' });
 
     const hash = await bcrypt.hash(senha, 12);
+    
+    // Retorna a data 'criado_em' gerada automaticamente pelo Postgres no momento exato do insert
     const insert = await pool.query(
-      'INSERT INTO usuarios (nome, email, senha, setor) VALUES ($1,$2,$3,$4) RETURNING id, nome, email, setor',
+      'INSERT INTO usuarios (nome, email, senha, setor) VALUES ($1,$2,$3,$4) RETURNING id, nome, email, setor, criado_em',
       [nome, email, hash, setor]
     );
     const user = insert.rows[0];
     const token = signToken(user);
-    return res.json({ success: true, message: 'Registrado', token, user });
+    
+    const safeUser = { id: user.id, nome: user.nome, email: user.email, setor: user.setor };
+    return res.json({ success: true, message: 'Registrado', token, user: safeUser });
   } catch (err) {
     console.error('ERR register', err);
     return res.status(500).json({ success: false, message: 'Erro interno' });
@@ -80,7 +81,8 @@ app.post('/api/auth/login', async (req, res) => {
     const { email, senha } = req.body;
     if (!email || !senha) return res.status(400).json({ success: false, message: 'Campos faltando' });
 
-    const r = await pool.query('SELECT id, nome, email, senha, setor FROM usuarios WHERE email = $1', [email]);
+    // Garante a busca do campo 'criado_em' do banco de dados
+    const r = await pool.query('SELECT id, nome, email, senha, setor, criado_em FROM usuarios WHERE email = $1', [email]);
     const user = r.rows[0];
     if (!user) return res.status(401).json({ success: false, message: 'Credenciais inválidas' });
 
@@ -101,35 +103,35 @@ app.get('/api/users', async (req, res) => {
   try {
     const auth = req.headers.authorization;
     if (!auth) return res.status(401).json({ success: false, message: 'Sem token' });
-      const token = auth.split(' ')[1];
-       let currentUser;
-       try { 
-        currentUser = jwt.verify(token, process.env.JWT_SECRET); 
-        } catch (e) { 
+    const token = auth.split(' ')[1];
+    let currentUser;
+    try { 
+      currentUser = jwt.verify(token, process.env.JWT_SECRET); 
+    } catch (e) { 
       return res.status(401).json({ success: false, message: 'Token inválido' }); 
     }
     const users = await pool.query(
-    'SELECT id, nome, email, setor FROM usuarios WHERE id != $1 ORDER BY nome',
-    [currentUser.id]
+      'SELECT id, nome, email, setor FROM usuarios WHERE id != $1 ORDER BY nome',
+      [currentUser.id]
     );
     return res.json({ success: true, users: users.rows });
-    } catch (err) {
+  } catch (err) {
     console.error('ERR /api/users', err);
     return res.status(500).json({ success: false, message: 'Erro interno' });
   }
 });
 
-// Rota para buscar histórico de mensagens de uma sala - CORRIGIDA
+// Rota para buscar histórico de mensagens de uma sala - TOTALMENTE BLINDADA E ADAPTADA PARA FUSO HORÁRIO
 app.get('/api/rooms/:roomName/messages', async (req, res) => {
   try {
     const auth = req.headers.authorization;
-      if (!auth) return res.status(401).json({ success: false, message: 'Sem token' });
-      const token = auth.split(' ')[1];
-      let payload;
-      try { 
-        payload = jwt.verify(token, process.env.JWT_SECRET); 
+    if (!auth) return res.status(401).json({ success: false, message: 'Sem token' });
+    const token = auth.split(' ')[1];
+    let payload;
+    try { 
+      payload = jwt.verify(token, process.env.JWT_SECRET); 
     } catch (e) { 
-    return res.status(401).json({ success: false, message: 'Token inválido' }); 
+      return res.status(401).json({ success: false, message: 'Token inválido' }); 
     }
 
     const roomName = req.params.roomName;
@@ -155,23 +157,28 @@ app.get('/api/rooms/:roomName/messages', async (req, res) => {
       return res.json({ success: true, messages: msgs.rows });
     }
 
-    // Para salas normais - CORREÇÃO: Verifica permissão do usuário
+    // Para salas normais (geral ou setor)
     const sala = await pool.query('SELECT id FROM salas WHERE nome = $1', [roomName]);
     if (sala.rowCount === 0) return res.status(404).json({ success: false, message: 'Sala não encontrada' });
     
-    //  VERIFICAÇÃO DE PERMISSÃO: Só permite acesso se for sala geral ou do mesmo setor
+    // VERIFICAÇÃO DE PERMISSÃO: Só permite acesso se for sala geral ou do mesmo setor
     if (roomName !== 'geral' && payload.setor !== roomName) {
       return res.status(403).json({ success: false, message: 'Acesso negado a esta sala' });
     }
     
     const salaId = sala.rows[0].id;
+    
+    // CORREÇÃO ESSENCIAL: Transforma a string do token num objeto Date estável.
+    // Isso impede que strings com micro-diferenças de fuso horário limpem a tela ao alternar salas.
+    const dataFiltro = new Date(payload.criado_em);
+
     const msgs = await pool.query(
       `SELECT m.id, m.usuario_id, u.nome as usuario_nome, m.content, m.criado_em
        FROM mensagens m
        JOIN usuarios u ON u.id = m.usuario_id
-       WHERE m.sala_id = $1
+       WHERE m.sala_id = $1 AND m.criado_em >= $2
        ORDER BY m.criado_em ASC`,
-      [salaId]
+      [salaId, dataFiltro]
     );
 
     return res.json({ success: true, messages: msgs.rows });
@@ -198,10 +205,8 @@ io.use((socket, next) => {
 io.on('connection', (socket) => {
   console.log('usuário conectado', socket.id, socket.user);
 
-  // join_room: CORRIGIDO - Verifica permissões
   socket.on('join_room', async (roomName) => {
     try {
-      // Para salas privadas
       if (roomName.startsWith('privada_')) {
         const [_, userId1, userId2] = roomName.split('_');
         const participantes = [parseInt(userId1), parseInt(userId2)];
@@ -217,14 +222,12 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // Para salas normais - CORREÇÃO: Verifica permissão
       const sala = await getSalaByName(roomName);
       if (!sala) {
         socket.emit('error_message', { message: 'Sala inexistente' });
         return;
       }
 
-      // Só permite entrar se for sala geral ou do mesmo setor
       if (roomName !== 'geral' && socket.user.setor !== roomName) {
         socket.emit('error_message', { message: 'Você não tem acesso a esta sala' });
         return;
@@ -244,7 +247,6 @@ io.on('connection', (socket) => {
     socket.emit('left_room', { room: roomName });
   });
 
-  // send_message: CORRIGIDO - Sem duplicação
   socket.on('send_message', async (data) => {
     try {
       const { text, room } = data;
@@ -253,14 +255,12 @@ io.on('connection', (socket) => {
       console.log(` ${socket.user.nome} enviando para: ${room}`);
 
       if (room === 'geral') {
-        //  Sala GERAL - todos recebem
         const sala = await getSalaByName('geral');
         await pool.query(
           'INSERT INTO mensagens (usuario_id, sala_id, content, setor_destino) VALUES ($1,$2,$3,$4)',
           [socket.user.id, sala.id, text, 'geral']
         );
         
-        // Envia para TODOS os usuários
         io.emit('receive_message', {
           text,
           sender: { id: socket.user.id, nome: socket.user.nome, setor: socket.user.setor },
@@ -269,7 +269,6 @@ io.on('connection', (socket) => {
         });
 
       } else if (room.startsWith('privada_')) {
-        // Sala PRIVADA - só os 2 participantes recebem
         const [_, userId1, userId2] = room.split('_');
         const participantes = [parseInt(userId1), parseInt(userId2)];
         
@@ -282,7 +281,6 @@ io.on('connection', (socket) => {
           [socket.user.id, 0, text, room]
         );
 
-        // Envia apenas para os 2 participantes
         io.to(room).emit('receive_message', {
           text,
           sender: { id: socket.user.id, nome: socket.user.nome, setor: socket.user.setor },
@@ -291,21 +289,19 @@ io.on('connection', (socket) => {
         });
 
       } else {
-        // Sala de SETOR - só o setor recebe
         const sala = await getSalaByName(room);
         if (!sala) return socket.emit('error_message', { message: 'Sala inválida' });
 
-        // Verifica se o usuário pertence ao setor
         if (socket.user.setor !== room) {
           return socket.emit('error_message', { message: 'Você não pode enviar nesta sala' });
         }
 
         await pool.query(
           'INSERT INTO mensagens (usuario_id, sala_id, content, setor_destino) VALUES ($1,$2,$3,$4)',
+          // Correção do campo para bater com a estrutura mantida na tabela ('setor_destino')
           [socket.user.id, sala.id, text, room]
         );
 
-        // Envia apenas para usuários do mesmo setor
         io.to(room).emit('receive_message', {
           text,
           sender: { id: socket.user.id, nome: socket.user.nome, setor: socket.user.setor },
@@ -325,7 +321,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// start
 server.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });

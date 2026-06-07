@@ -20,7 +20,7 @@ export default function ChatWindow() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 🔹 Função auxiliar: pega ID do usuário atual
+  // pegando id do usuário
   function getCurrentUserId() {
     const userStr = localStorage.getItem("user");
     if (!userStr) return null;
@@ -32,7 +32,7 @@ export default function ChatWindow() {
     }
   }
 
-  // 🔹 Conexão Socket.io
+  // conexão via socket
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const opts = token ? { auth: { token } } : {};
@@ -180,12 +180,12 @@ export default function ChatWindow() {
     nome: getRoomDisplayName(salaAtual),
     icone:
       salas.find((s) => s.id === salaAtual)?.icone ||
-      (salaAtual.startsWith("privada_") ? "🔒" : "💬"),
+      (salaAtual.startsWith("privada_") ? "" : ""),
   };
 
   const mensagensAtuais = historicoPorSala[salaAtual] || [];
 
-  // 🔹 Renderização
+  //Renderização
   return (
     <div className="flex-1 h-screen flex flex-col bg-gray-100">
       {/* Cabeçalho */}
